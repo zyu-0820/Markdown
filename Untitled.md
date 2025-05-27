@@ -96,3 +96,4 @@ xtrabackup --prepare --apply-log-only --target-dir=/完全备份目录
 xtrabackup -copy-back --target-dir=完全备份目录
 ```
 
+CEHSI3MYPC
