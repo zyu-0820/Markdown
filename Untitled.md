@@ -71,3 +71,28 @@ ok: run: unicorn: (pid 2203) 0s             //Rails托管WEB服务
 [root@GitLab ~]# 
 ```
 
+份**
+
+```bash
+xtrabackup --host=127.0.0.1 --user=用户名 --password=密码 --backup --target-dir=/备份目录 --incremental-basedir=/完全备份目录 --datadir=/数据库目录
+```
+
+**数据恢复**
+
+```bash
+xtrabackup --prepare --apply-log-only --target-dir=完全备份目录
+```
+
+**合并数据**
+
+```bash
+xtrabackup --prepare --apply-log-only --target-dir=/完全备份目录 
+--incremental-dir=/最后一次差异备份
+```
+
+拷贝数据
+
+```bash
+xtrabackup -copy-back --target-dir=完全备份目录
+```
+
