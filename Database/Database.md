@@ -665,6 +665,28 @@ CREATE TABLE 数据库名.表名 (
 
 > 2NF与3NF的区别:在子有没有分出2张表，2NF如果一张表中包含多种不同实体的属性那么必须要分成多张表。3NF已经分成多张表后，一张表中只能有另一张表中的主键,而不能有其他的信息。
 
+## SQL语句分类
+
+- DDL:database define language，数据定义语句
+              create/alter/drop
+- DML:database manager language，数据操作语句
+              insert/update/delete
+- DQL:database query language，数据查询语句
+              select/show        
+- DCL:database control language，数据控制语句
+              grant/revoke        
+- TCL:transcation control language，事务控制语句
+              begin/commit/savepoint/rollback  
+
+**事务**：针对DML，，一组SQL语句要么全部执行，要么全部不执行，是保证数据准确性的机制。
+
+**事务特性：**
+
+- 原子性(Auomicity):在一个事务中，像增删改（DML）要么全部成功，要么全部失败
+- 一致性(Consistency)：事务完成时必须所有数据都保持一致状态
+- 隔离性(Isolation)：多个事务的执行是互不干扰的
+- 持久性(Durability)：事务一旦提交或回滚，它对数据库中的数据的改变就是永久的
+
 ## 索引
 
 什么是索引（index）
@@ -894,6 +916,22 @@ xtrabackup --prepare --apply-log-only --target-dir=/完全备份目录
 拷贝数据
 
 ```bash
+#拷贝数据前清空数据库目录
 xtrabackup -copy-back --target-dir=完全备份目录
+#拷贝后修改数据库目录所有者及属组为mysql
 ```
+
+## Binlog日志
+
+> <font color='black'>也称做二进制日志，保存除查询外的所有SQL命令，可用于数据的备份和恢复，配置mysql主从同步的必要条件，默认是启动的，目录为`/var/lib/mysql`</font>
+
+![image-20250527202118397](./image-20250527202118397.png)
+
+**自定义日志**
+
+| 配置项                 | 用途                     |
+| ---------------------- | ------------------------ |
+| server_id=numbei       | 指定id值（1-255）        |
+| log_bin                | 启用binlog日志           |
+| max_binlog_size=number | 指定日志文件容量，默认1G |
 
