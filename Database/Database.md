@@ -935,3 +935,25 @@ xtrabackup -copy-back --target-dir=完全备份目录
 | log_bin                | 启用binlog日志           |
 | max_binlog_size=number | 指定日志文件容量，默认1G |
 
+**恢复数据**
+
+命令格式
+
+```bash
+mysqlbinlog /var/lib/mysql/binlog.000001  | mysql -uroot -ppassword 
+```
+
+## MySQL主从同步
+
+数据库复制技术：将一个Mysql数据库的变更操作同步到另外一个或者多个Mysql数据库。
+
+**主从同步原理**
+
+![image-20250528193747508](./image-20250528193747508.png)
+
+Master：启用binlog日志，记录所有的数据库更新和修改操作
+
+Slave：
+
+- Slave_IO：复制master主机binlog日志文件里面的SQL命令到本机的relay-log文件里
+- Slave_SQL：执行本机relay-log文件里面的SQL语句，实现与Master数据一致
