@@ -97,3 +97,11 @@ xtrabackup -copy-back --target-dir=完全备份目录
 ```
 
 CEHSI3MYPC
+
+<details>
+<summary>样例</summary>
+121
+1212
+123112
+4123122
+</details>

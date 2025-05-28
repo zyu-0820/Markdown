@@ -18,6 +18,7 @@ commit 	#提交修改到本地仓库
 status 	#查看当前状态
 clone 	#将远程服务器的仓库克隆到本地
 push 	#提交修改到远程服务器
+pull 	#拉取远程服务器仓库
 ```
 
 **git基础配置**
@@ -84,5 +85,12 @@ git checkout 分支名
 #合并分支，将hotfix合并到master分支，合并前切换到master分支
 git merge hosfix
 #有冲突的文件会将所有分支内容放在一起，由管理员修改文件内容
+```
+
+## Git标签
+
+```bash
+git tag		#查看已有标签
+git tag v1	#创建标签
 ```
 
