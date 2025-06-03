@@ -966,3 +966,88 @@ Slave：
 
 从库更新relaylog文件，SQL线程将relaylog文件中的更新执行一遍，达到与主库数据一致的目的
 
+### 构建思路
+
+- 配置主服务器
+  — 启用binlog日志，授权用户，查看binlog日志信息 （查看偏移量）
+
+- 配置从服务器
+  — 设置server_id 并重启数据库(需拷贝主服务器数据库)
+  — 指定主服务器信息
+  — 启动slave进程
+
+  — 查看状态信息
+
+```bash
+#主服务器
+vim /etc/my.cnf.d/mysql-server.cnf
+[mysqld]
+server-id=53
+log-bin=mysql53
+#重启服务
+#创建服务用户，授权
+mysql> create user repluser@"%" identified by "123qqq...A";
+mysql> grant replication slave on *.*  to repluser@"%";
+
+ #从服务器
+ vim /etc/my.cnf.d/mysql-server.cnf
+[mysqld]
+server-id=54
+#重启服务
+#指定主服务器信息
+mysql> change master to  
+master_host="192.168.88.53", 
+master_user="repluser",
+master_password="123qqq...A",
+master_log_file="mysql53.000001", 
+master_log_pos=667;
+#启动slave进程
+mysql> start slave ; 
+#查看状态
+mysql> show slave status \G 
+...
+	        Slave_IO_Running: Yes   //IO线程
+            Slave_SQL_Running: Yes   //SQL线程
+```
+
+## MySQL读写分离
+
+MySQL读写分离是指将MySQL数据库的读操作和写操作分别分配到不同的服务器上，通过这种方式可以提高数据库的并发处理能力和性能、降低系统失败的风险。要保证负责读访问主机与负责写访问主机的数据一致。
+
+### 构建思路
+
+安装Mycat软件
+
+定义客户端连接mycat服务使用用户密码
+
+```bash
+vim  /usr/local/mycat/conf/users/root.user.json
+{
+        "dialect":"mysql",
+        "ip":null,
+        "password":"654321",  #密码
+        "transactionType":"proxy",
+        "username":"mycat" 		#用户名
+}
+#定义连接的数据库服务器
+vim  /usr/local/mycat/conf/datasources/prototypeDs.data
+{
+        "dbType":"mysql",
+        "idleTimeout":60000,
+        "initSqls":[],
+        "initSqlsGetConnection":true,
+        "instanceType":"READ_WRITE",
+        "maxCon":1000,
+        "maxConnectTimeout":3000,
+        "maxRetryCount":5,
+        "minCon":1,
+        "name":"prototypeDs",
+        "password":"123456",  #密码
+        "type":"JDBC",
+        "url":"jdbc:mysql://localhost:3306/mysql?useUnicode=true&serverTimezone=Asia/Shanghai&characterEncoding=UTF-8",  #连接本机的数据库服务
+        "user":"plj",  #用户名
+        "weight":0
+}
+#
+```
+
