@@ -957,3 +957,12 @@ Slave：
 
 - Slave_IO：复制master主机binlog日志文件里面的SQL命令到本机的relay-log文件里
 - Slave_SQL：执行本机relay-log文件里面的SQL语句，实现与Master数据一致
+
+工作流程：
+
+主库将数据的事务操作（DML）记录到binlog日志文件里;
+
+从库监听主库binlog日志变化，当发生变化后，IO线程去请求主库的binlog日志，并将日志变化写入到relaylog日志文件中，此时主库生产Log dump线程，给从库IO线程传输binlog日志文件内容;
+
+从库更新relaylog文件，SQL线程将relaylog文件中的更新执行一遍，达到与主库数据一致的目的
+
