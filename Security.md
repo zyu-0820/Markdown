@@ -239,6 +239,20 @@ systemctl daemon-reload
 systemctl enable node_exporter.service --now
 ```
 
+## 在Prometheus服务器上添加监控节点
+
+```bash
+# 1. 修改配置文件，追加以下内容。特别注意缩进
+[root@prometheus ~]# vim /usr/local/prometheus/prometheus.yml 
+...略...
+  - job_name: "web1"
+    static_configs:
+      - targets: ["192.168.88.100:9100"]
+      
+# 2. 重启服务
+[root@prometheus ~]# systemctl restart prometheus.service 
+```
+
 ## Grafana
 
 Grafana是一款开源的、跨平台的、基于web的可视化工具，展示方式：客户端图表、面板插件，数据源可以来自于各种源，如prometheus
@@ -507,3 +521,54 @@ roups:
 重启服务，安装邮件服务
 
 ![image-20250524094638655](./image-20250524094638655.png)
+
+# iptables
+
+![image-20250604153153071](./image-20250604153153071.png)
+
+### 防火墙filter表
+
+- 配置iptables时，不指定表，就是使用filter表
+- 配置时不指定规则链，则配置所有链
+- 可以向规则链中加入很多规则，数据包进入该链时，从上向下匹配，一旦匹配就停止，开始应用规则。如果全都不匹配，则应用默认规则
+- 命令选项、链名、目标操作使用大写字母，其他小写
+
+#### ilter中的三条链
+
+- INPUT：数据包的目标地址是自己，则进入INPUT链
+- OUTPUT:数据包的源地址是自己，则进入OUTPUT链
+- FORWARD：数据包穿过自己，则进入FORWARD链
+
+#### iptables操作
+
+语法
+
+```bash
+iptables [-t 表名] 选项 [链名] [条件] [-j 满足条件的操作]
+```
+
+常用选项
+
+```bash
+-A 追加规则-->iptables -A INPUT
+-D 删除规则-->iptables -D INPUT 1(编号)
+-R 修改规则-->iptables -R INPUT 1 -s 192.168.12.0 -j DROP 取代现行规则，顺序不变(1是位置)
+-I 插入规则-->iptables -I INPUT 1 --dport 80 -j ACCEPT 插入一条规则，原本位置上的规则将会往后移动一个顺位
+-L 查看规则-->iptables -L INPUT 列出规则链中的所有规则
+
+通用参数：
+-p 协议  例：iptables -A INPUT -p tcp
+-s 源地址 例：iptables -A INPUT -s 192.168.1.1
+-d 目的地址 例：iptables -A INPUT -d 192.168.12.1
+--sport 源端口 例:iptables -A INPUT -p tcp --sport 22
+--dport 目的端口 例:iptables -A INPUT -p tcp --dport 22
+-i 指定入口网卡 例:iptables -A INPUT -i eth0
+-o 指定出口网卡 例:iptables -A FORWARD -o eth0
+
+-j 指定要进行的处理动作
+常用的ACTION：
+DROP：丢弃
+REJECT：明示拒绝
+ACCEPT：接受
+```
+
