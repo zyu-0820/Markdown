@@ -104,4 +104,24 @@ CEHSI3MYPC
 1212
 123112
 4123122
+<pre><code lang="shell"> vim /etc/passwd</code></pre>
 </details>
+
+参考答案
+
+```shell
+alice@cka0001:~$ sudo dpkg -i ~alice/cri-dockerd_0.3_amd64.deb
+alice@cka0001:~$ sudo -i
+root@cka0001:~# systemctl enable --now cri-docker.service
+root@cka0001:~# vim /etc/modules-load.d/modules.conf
+br_netfilter
+xt_conntrack
+root@cka0001:~# systemctl restart systemd-modules-load.service
+root@cka0001:~# vim /etc/sysctl.d/99-sysctl.conf
+net.ipv4.ip_forward = 1
+net.ipv6.conf.all.forwarding = 1
+net.bridge.bridge-nf-call-iptables = 1
+net.netfilter.nf_conntrack_max = 65536
+root@cka0001:~# sysctl -p /etc/sysctl.d/99-sysctl.conf
+```
+
