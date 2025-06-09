@@ -87,11 +87,12 @@
 >   - 设置 **net.netfilter.nf_conntrack_max** 为 **65536**
 >
 > 
-   <details>
+>  
+ <details>
        <summary>参考答案</summary>
-       <pre><code class="language-shell">
+       \`\`\`shell
        ping www.baidu.com
-       </code></pre>
+       \`\`\
    </details>
 
 
