@@ -1,101 +1,3 @@
-$0   文本当前行的全部内容
-$1   文本的第1列
-$2   文件的第2列
-$3   文件的第3列，依此类推
-NR   文件当前行的行号
-NF   文件当前行
-
-```bash
-$0   文本当前行的全部内容
-$1   文本的第1列
-$2   文件的第2列
-$3   文件的第3列，依此类推
-NR   文件当前行的行号
-NF   文件当前行的列数（有几列）
-FS   字段分隔符，默认是空格
-FNR  各文件分别记行号
-FILENAME  文件名
-awk 'BEGIN{ commands } pattern{ commands } END{ commands }'
-BEGIN{ }    行前处理，读取文件内容前执行，指令执行1次
-  { }         逐行处理，读取文件过程中执行，指令执行n次
-  END{ }     行后处理，读取文件结束后执行，指令执行1次
-  
-```
-
-awk 'BEGIN{ commands } pattern{ commands } END{ commands }'
-
-```bash
-#确认GitLab主机硬件配置
-[root@GitLab ~]# free -m
-              total        used        free      shared  buff/cache   available
-Mem:           3896         113        3691           8          90        3615
-Swap:             0           0           0
-
-#安装解压软件
-[root@GitLab ~]# yum -y install unzip
-
-#解压实验素材（提前从server1主机/linux-soft/s3/PROJECT02.zip拷贝的资料）
-[root@GitLab ~]# unzip PROJECT02.zip
-
-#查看解压的素材资料
-[root@GitLab ~]# ls PROJECT02/GitLab/
-gitlab-ce-12.4.6-ce.0.el7.x86_64.rpm
-
-#安装GitLab软件包,强制忽略依赖安装
-[root@GitLab ~]# rpm -ivh --nodeps gitlab-ce-12.4.6-ce.0.el7.x86_64.rpm                 
-#重载GitLab配置（需要耐心等待）
-[root@GitLab ~]# gitlab-ctl reconfigure
-...
-Running handlers:
-Running handlers complete
-Chef Client finished, 527/1423 resources updated in 02 minutes 05 seconds
-gitlab Reconfigured!
-
-#重启GitLab相关服务
-[root@GitLab ~]# gitlab-ctl restart
-ok: run: alertmanager: (pid 1975) 0s        //报警服务
-ok: run: gitaly: (pid 1986) 1s              //Git后台服务
-ok: run: gitlab-exporter: (pid 2014) 0s     //Prometheus数据采集器
-ok: run: gitlab-workhorse: (pid 2020) 1s    //反向代理服务器
-ok: run: grafana: (pid 2117) 0s             //数据可视化服务
-ok: run: logrotate: (pid 2129) 0s           //日志文件管理服务
-ok: run: nginx: (pid 2135) 1s               //静态WEB服务
-ok: run: node-exporter: (pid 2142) 0s       //Prometheus数据采集器
-ok: run: postgres-exporter: (pid 2148) 1s   //Prometheus数据采集器
-ok: run: postgresql: (pid 2159) 0s          //数据库服务
-ok: run: prometheus: (pid 2168) 0s          //Prometheus监控服务
-ok: run: redis: (pid 2178) 1s               //缓存数据库服务
-ok: run: redis-exporter: (pid 2183) 0s      //Prometheus数据采集器
-ok: run: sidekiq: (pid 2192) 0s             //异步执行队列服务
-ok: run: unicorn: (pid 2203) 0s             //Rails托管WEB服务
-[root@GitLab ~]# 
-```
-
-份**
-
-```bash
-xtrabackup --host=127.0.0.1 --user=用户名 --password=密码 --backup --target-dir=/备份目录 --incremental-basedir=/完全备份目录 --datadir=/数据库目录
-```
-
-**数据恢复**
-
-```bash
-xtrabackup --prepare --apply-log-only --target-dir=完全备份目录
-```
-
-**合并数据**
-
-```bash
-xtrabackup --prepare --apply-log-only --target-dir=/完全备份目录 
---incremental-dir=/最后一次差异备份
-```
-
-拷贝数据
-
-```bash
-xtrabackup -copy-back --target-dir=完全备份目录
-```
-
 CEHSI3MYPC
 
 <details>
@@ -105,3 +7,161 @@ CEHSI3MYPC
 123112
 4123122
 </details>
+### 第一部分：项目CI/CD工作流程全景
+
+（指向第一张PPT）
+我们的医疗系统迭代遵循标准化流水线，形成开发→集成→部署的闭环：
+
+**1. 开发协作层**（左端）
+
+- **双端协同**：前端开发者（Vue/React技术栈）与后端开发者（Spring Boot技术栈）并行编码
+- **规范准入**：所有代码必须通过ESLint/SonarQube检测才能提交，确保医疗业务逻辑零缺陷
+
+**2. 代码托管层**（顶部）
+
+- **安全管控**：代码统一托管至GitLab私有服务器，执行医疗行业三重防护：
+  - 分支保护策略（`release`分支需双人评审）
+  - 敏感信息扫描（防止PHI数据泄露）
+  - 合规审计日志（满足HIPAA追溯要求）
+
+**3. 自动化枢纽**（中部）
+
+- **精准触发**：Jenkins根据策略执行任务：
+  - 前端任务：构建Vue应用→容器化封装→安全扫描
+  - 后端任务：编译Java服务→单元测试→生成医疗业务API文档
+- **医疗级质检**：在构建环节嵌入：
+  - 医疗器械软件测试标准（IEC 62304）
+  - 患者数据加密验证
+
+**4. 部署运行层**（右端）
+
+- **分级发布**：
+
+  图表
+
+  代码
+
+  
+
+  复制
+
+  
+
+  下载
+
+  ```mermaid
+  graph LR
+    A[前端服务器] -->|蓝绿发布| B[患者端界面]
+    C[后端服务器] -->|金丝雀发布| D[医嘱处理服务]
+    E[数据库服务器] -->|A/B迁移| F[电子病历数据]
+  ```
+
+- **零宕机保障**：通过Service Mesh实现流量无损切换，确保急诊业务连续性
+
+------
+
+### 第二部分：核心工具链解析
+
+（指向第二张PPT）
+支撑该流程的是三大开源引擎，它们在医疗场景中展现出独特价值：
+
+**1. Git - 分布式版本控制基石**
+
+- **医疗合规优势**：
+
+  - 代码修改留痕（满足FDA 21 CFR Part 11电子签名要求）
+  - 紧急热修复分支（`critical-fix`）独立管理，避免污染主分支
+
+- **典型操作**：
+
+  bash
+
+  
+
+  复制
+
+  
+
+  下载
+
+  ```
+  # 医疗功能开发规范
+  git flow feature start patient-data-encryption  # 启用特性分支
+  git commit -S -m "HIPAA#2023: 实现患者数据加密" # 签名提交
+  ```
+
+**2. GitLab - 一体化代码管理平台**
+
+- **医疗定制能力**：
+  - 镜像仓库自动扫描CVE漏洞（联动Trivy引擎）
+  - Kubernetes集群直接部署病历分析微服务
+  - RBAC权限矩阵（区分医生/护士/管理员访问权限）
+- **关键界面**（展示GitLab截图）：
+  - 需求跟踪看板关联医疗用户故事
+  - 合并请求强制关联Jira医疗工单ID
+
+**3. Jenkins - 持续集成引擎**
+
+- **医疗场景适配**：
+
+  - 构建环境隔离（每个任务独立Docker容器）
+  - 流水线即代码（Jenkinsfile版本化存储）
+  - 部署审批门禁（生产发布需医疗技术负责人OTP验证）
+
+- **典型流水线**：
+
+  groovy
+
+  
+
+  复制
+
+  
+
+  下载
+
+  ```mermaid
+  stage('部署预生产') {
+    input {
+      message "是否部署心电图分析模块？"
+      ok "确认发布"
+      submitter "cto-team,qa-lead" // 需医疗负责人双签
+    }
+    steps {
+      kubeDeploy(namespace: 'cardiology') // 定向发布到心内科集群
+    }
+  }
+  ```
+
+------
+
+### 第三部分：医疗系统的实践价值
+
+这套工具链为"白色强人"系统带来三重提升：
+
+**1. 安全性跃迁**
+
+- 漏洞修复周期从14天缩短至2小时
+- 通过等保三级认证，审计项100%覆盖
+
+**2. 效率革命**
+
+- 版本迭代速度提升300%，日均部署达12次
+- 资源利用率提升（K8s集群CPU使用率从35%→68%）
+
+**3. 业务保障**
+
+- 实现全年99.99%服务可用性
+- 疫情期间快速上线疫苗预约模块（从需求到上线仅72小时）
+
+------
+
+### 结语
+
+在医疗数字化浪潮中，**以GitLab为控制中心、Jenkins为自动化引擎、Git为质量基石的CI/CD体系**，已成为支撑生命健康系统的"数字心脏"。未来我们将探索：
+
+- AI辅助医疗代码审计
+- 混沌工程强化业务韧性
+- 区块链构建医疗数据可信供应链
+
+这套流程不仅是技术方案，更是我们对"科技守护生命"使命的践行！
