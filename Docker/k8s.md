@@ -41,6 +41,19 @@
 | kubelet                 | 10250     | 节点代理服务       |
 | kube-proxy              | 10256     | 网络通讯与负载均衡 |
 
+官方下载地址：https://packages.cluod.google.com
+
+禁用swap
+
+安装工具软件包
+
+- kubeadm：集群配置工具
+- kubelet：管理 pod，在集群中的每个节点上启动
+- kubectl：用来与集群通信的命令行工具
+- containerd：容器管理软件（Runtime）
+- ipvsadm：集群管理工具
+- iproute-tc：网络流量管理工具
+
 # 集群管理
 
 kubectl用于控制Kubernetes集群的命令行工具
@@ -263,4 +276,32 @@ Metrics-server 是什么？
 - Metrics-Server 通过 kubelet 获取 node 和 Pod 的 CPU，内存等监控数据。为调度器、弹性控制器、以及 Dashboard 等 UI 组件提供数据来源
 
 # 资源清单文件
+
+Kubernetes 对象是 “目标性记录”，Kubernetes 使用这些对象去表示整个集群的状态。
+
+创建 Kubernetes 对象时，必须提供资源对象的一些基本信息（例如：资源的对象的名字），以及描述描述该对象的期望状态特征（规约），如果我们在文件中使用 Yaml 的语法格式描述了上面的信息，这个文件就是<font style="color: rgb(0,255,0);">资源清单文件</font>。
+
+**管理命令**
+
+语法格式：`kubectl 子命令 -f 资源清单文件`
+
+| **子命令** | **说明**                     | **备注**                     |
+| ---------- | ---------------------------- | ---------------------------- |
+| create     | 创建文件中定义的资源         | 支持指令式和资源清单文件配置 |
+| apply      | 创建（更新）文件中定义的资源 | 只支持资源清单文件（声明式） |
+| delete     | 删除文件中定义的资源         | 支持指令式和资源清单文件配置 |
+| replace    | 更改/替换资源对象            | 强制重建 --force             |
+
+```yaml
+--- 
+kind: Pod
+apiVersion: v1
+metadata: 
+  name: myweb
+spec:
+  containers: 
+  - name: web
+    image: myos:nginx
+status: {}
+```
 
