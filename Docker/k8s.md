@@ -456,6 +456,67 @@ spec:
 - 打分(优选)：在打分阶段，调度器会根据打分规则，为每一个可调度节点进行打分。选出其中得分最高的节点来运行 Pod。如果存在多个得分最高的节点，调度器会从中随机选取一个
 - 绑定：在确定了某个节点运行 Pod 之后，调度器将这个调度决定通知给 kube-apiserver，这个过程叫做绑定
 
+## Pod 定向调度
+基于节点名称的调度
+
+-  在创建 Pod 的过程中，我们可以配置相关的调度规则，从而让 Pod 运行在制定的节点
+-  nodeName 标签，让 Pod 运行在制定的节点上
+
+```yaml
+spec:
+  nodeName: node-0001     # 基于节点名称进行调度
+  containers:
+  - name: apache
+    image: myos:httpd
+```
+
+## 标签管理
+
+标签的什么
+
+- 标签（Labels）是附加到 Kubernetes 对象上的键值对。
+
+标签的用途
+
+- k8s 在创建、删除、修改资源对象的时候可以使用标签来确定要修改的资源对象。在 Pod 调度的任务中，使用标签可以更加灵活的完成调度任务。
+- 标签可以在创建时附加到对象，也可以在创建之后随时添加和修改。标签可以用于组织和选择对象的子集。
+
+```bash
+#设置标签
+kubectl label 资源类型 [资源名称] <key>=<value>
+#删除标签
+kubectl label 资源类型 [资源名称] <key>-
+#查看标签
+kubectl get 资源类型 [资源名称] --show-labels
+#使用标签选择
+kubectl get 资源类型 [资源名称] -l <key>=<value>
+
+kubectl label pod myhttp app=apache
+pod/myhttp labeled
+```
+
+## 基于标签调度
+
+```bash
+# 查询 node 节点上的标签
+[root@master ~]# kubectl get nodes --show-labels 
+NAME        STATUS   ROLES            VERSION   LABELS
+master      Ready    control-plane    v1.29.2   kubernetes.io/hostname=master
+node-0001   Ready    <none>           v1.29.2   kubernetes.io/hostname=node-0001
+node-0002   Ready    <none>           v1.29.2   kubernetes.io/hostname=node-0002
+node-0003   Ready    <none>           v1.29.2   kubernetes.io/hostname=node-0003
+# 使用 node 上的标签调度 Pod
+metadata:
+  name: myhttp
+  labels:
+    app: apache
+spec:
+  nodeSelector:
+    kubernetes.io/hostname: node-0002
+```
+
+
+
 # Pod生命周期
 
 ## 生命周期概述
@@ -716,3 +777,145 @@ spec:
   - NotBestEffort
 ```
 
+# 污点和容忍
+
+污点：使节点和Pod产生排斥的一类规则
+
+污点策略：通过嵌合在键值对上的污点标签进行声明
+
+<font style="color: rgb(0,233,0)">污点标签：尽量不调度：PerferNoSchedule；不会被调度：NoScheudle；驱逐节点：NoExecute</font>
+
+管理污点标签
+
+```bash
+#污点标签必须绑定在键值对上，格式为：
+key=value:[污点标签]
+#查看污点标签
+#kubectl describe nodes [节点名字]
+设置污点标签
+kubectl taint node [节点名字] key=value: 污点标签
+#删除污点标签
+kubectl taint node [节点名字] key=value: 污点标签 -
+```
+
+<font style="color: rgb(0,0,255);">`NoSchedule`</font>: **禁止调度**，新的不容忍此污点的 Pod 将不会被调度到该节点。**已运行在节点上的 Pod 不受影响。**
+
+<font style="color: rgb(0,0,255);">`PreferNoSchedule`</font>: **软性禁止调度**，调度器会尽量避免将不容忍此污点的 Pod 调度到该节点，但如果没有其他合适节点，仍然可能调度。
+
+<span style="color: rgb(0,0,255)">`NoExecute`</span>: **禁止执行**，这个效果最严格：
+
+- 新的不容忍此污点的 Pod 不会被调度到该节点。
+- **已运行在节点上的 Pod，如果不容忍此污点，会被驱逐 (Evicted)**。Pod 会被终止并在其他节点上重建（如果容忍度允许的话）。
+- 可以**可选地**为 `NoExecute` 污点指定 `tolerationSeconds` 字段（在 Pod 的容忍度中定义），表示 Pod 在节点被添加 `NoExecute` 污点后还能在该节点上运行多久（秒），然后才被驱逐。如果不设置 `tolerationSeconds` 或设为 `0`，则立即驱逐。
+
+## 容忍策略
+
+容忍策略是什么？
+
+容忍刚好与污点相反，某些时候我们需要在有污点的节点上运行 Pod，这种无视污点标签的调度方式称为容忍
+
+```yaml
+# 配置容忍策略示例
+spec:
+  tolerations:          # 定义容忍策略
+  - operator: "Equal"   # 匹配方式，必选（Equal，Exists）
+    key: "k1"           # 设置键值对的 key，为空代表任意键值对
+    value: "v1"         # 设置 values 的值
+    effect: "NoSchedule"# 设置容忍的标签，为空代表所有污点标签
+  containers:
+  ……
+```
+
+# 抢占与优先级
+
+**PriorityClass 简介**
+
+- PriorityClass 是一个全局资源对象，它定义了从优先级类名称到优先级整数值的映射。在优先级类中有两个重要选项，分别是 value 和 preemptionPolicy。
+- value 是一个整数值，值越大，优先级越高，取值范围是 0 到 1000000000 之间。
+- preemptionPolicy 表示在资源不足时候的行为，在队列中等待或者直接抢夺低优先级应用的资源。
+
+**优先级策略：**
+
+- 抢占策略：PreemptLowerPriority
+- 非抢占策略：Never
+
+**描述信息与默认优先级**
+
+- 在 PriorityClass 中还有两个可选字段，是 description 和 globalDefault，description 用来配置描述性信息，告诉用户优先级的用途，globalDefault 用于设置默认优先级状态，如果没有任何优先级设置 Pod 的优先级为 0
+
+定义优先级资源对象
+
+- 创建一个 value 为 1000 的优先级对象
+- 设置非抢占策略 Never
+
+```yaml
+---
+kind: PriorityClass
+apiVersion: scheduling.k8s.io/v1
+metadata:
+  name: high-non              # 优先级名称
+preemptionPolicy: Never       # 策略：非抢占
+value: 1000                   # 优先级
+```
+
+在 Pod 中指定优先级
+
+- 通过 low-non 指定优先级为 500
+
+```bash
+......
+spec:
+  nodeSelector:
+    kubernetes.io/hostname: node-0002
+  priorityClassName: high-non  # 指定优先级的名字
+  containers:
+  - name: php
+    image: myos:php-fpm
+    resources:
+      requests:
+        cpu: "1200m"
+```
+
+# 特权容器
+
+容器是通过名称空间技术隔离的，有时候我们执行一些应用服务，需要使用或修改敏感的系统信息，这时容器需要突破隔离限制，获取更高的权限，这类容器统称特权容器。
+
+运行特权容器会有一些安全风险，这种模式下运行容器对宿主机拥有 root 访问权限，可以突破隔离直接控制宿主机的资源配置。
+
+```yaml
+---
+kind: Pod
+apiVersion: v1
+metadata:
+  name: root
+spec:
+  hostPID: true                # 共享系统进程
+  hostNetwork: true            # 共享主机网络
+  containers:
+  - name: apache
+    image: myos:httpd
+    securityContext:           # 安全上下文值
+      privileged: true         # root容器，有root权限
+```
+
+# Pod安全性
+
+Pod安全策略是集群级别的资源，它能够控制Pod运行的行为，以及他具有访问什么的能力
+
+使用：Kubernetes服务器版本必须不低于v1.22，确保Podsecurity特性门控被启用
+
+**PodSecurity**提供一种内置的Pod安全性准入控制器，作为PodSecurityPolicies特性的后继演化版本。Pod安全性限制实在Pod被创建时，在名称空间层面实施的。
+
+**Pod安全策略**
+
+- privileged：不受限制的策略，提供最可能范围的权限许可，允许特权提升
+- baseline：弱限制的策略，禁止已知的策略提升权限，允许使用默认的Pod配置
+- restricted：非常严格的 限制性策略，遵循当前的保护Pod的最佳实践
+
+**Pod准入控制标签（MODE）**
+
+Kubernetes定义了一组标签，你可以设置这些标签来定义某个名字空间上的Pod安全标准级别，所选的标签定义了检测到潜在违例时，会采取的动作
+
+- enforce：策略违例会导致Pod被拒绝
+- audit：策略违例会触发审计日志，但是Pod仍可以被接受
+- warn：策略违例会触发用户可见的警告信息，但是Pod仍会被接受

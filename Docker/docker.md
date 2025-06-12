@@ -214,4 +214,88 @@ docker的网络通信模式
 
 微服务架构的优点：松耦合高内聚，高度可扩展，出色的弹性，易于部署，易于访问
 
+容器服务编排
+
+- 在微服务架构中每个微服务一般都会包含多个容器实例。
+- 如果每个微服务都要手动管理，那么效率之低、维护量之大可想而知。为了解决编排部署的问题，docker 公司推出了 docker Compose 工具
+- Compose 是一个用于定义和运行多容器的应用的工具。
+- 使用 Compose，可以在一个文件中配置多个容器服务，然后使用一个简单的命令就可以轻松、高效地管理配置中引用的所有容器服务。
+
+```bash
+[root@docker ~]# vim docker-compose.yaml
+name: myweb # 项目名称
+version: "3" # 语法格式版本  
+services: # 关键字，定义服务
+  websvc: # 服务名称
+    container_name: nginx # 容器名称
+      image: myos:nginx # 创建容器使用的镜像
+```
+
+| **指令**           | **说明**                   |
+| ------------------ | -------------------------- |
+| up                 | 创建项目并启动容器         |
+| ls                 | 列出可以管理的项目         |
+| images             | 列出项目使用的镜像         |
+| ps                 | 显示项目中容器的状态       |
+| logs               | 查看下项目中容器的日志     |
+| start/stop/restart | 启动项目/停止项目/重启项目 |
+| down               | 删除项目容器及网络         |
+
+容器项目管理
+
+```bash
+docker compose -f docker-compose.yaml up -d 		#创建项目，并启动
+docker compose ls -a								#查看项目
+docker compose -p myweb ps							#查看项目中的容器
+docker compose -p myweb images 						#查看项中使用的镜像
+```
+
+### compose 语法
+
+| **指令**       | **说明**                                                     |
+| :------------- | ------------------------------------------------------------ |
+| container_name | 指定容器名称                                                 |
+| image          | 指定为镜像名称或镜像 ID                                      |
+| ports          | 暴露端口信息                                                 |
+| volumes        | 数据卷,支持 [volume、bind、tmpfs、npipe]                     |
+| network_mode   | 设置网络模式                                                 |
+| environment    | 设置环境变量                                                 |
+| restart        | 容器保护策略[always、no、on-failure]                         |
+| command        | 覆盖容器启动后默认执行的命令                                 |
+| healthcheck    | 配置服务健康检测                                             |
+| depends_on     | 服务依赖关系 services_[started、healthy、completed_successfully] |
+
+### 容器服务编排
+
+```yaml
+[root@docker ~]# vim docker-compose.yaml 
+name: myweb
+version: "3"
+services:
+  websvc:
+    container_name: nginx
+    image: myos:nginx
+    ports:
+      - 80:80
+    environment:
+      - "TZ=Asia/Shanghai"
+    volumes:
+      - type: bind
+        source: /root/conf/nginx.conf
+        target: /usr/local/nginx/conf/nginx.conf
+      - type: bind
+        source: /var/webroot
+        target: /usr/local/nginx/html
+  phpsvc:
+    container_name: php
+    image: myos:php-fpm
+    restart: always
+    network_mode: "service:websvc"
+    volumes:
+      - type: bind
+        source: /var/webroot
+        target: /usr/local/nginx/html
+```
+
+# harbor私有仓库搭建
 
