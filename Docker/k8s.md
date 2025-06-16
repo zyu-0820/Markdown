@@ -54,6 +54,127 @@
 - ipvsadm：集群管理工具
 - iproute-tc：网络流量管理工具
 
+**配置containerd**
+
+```bash
+# 生成默认配置文件
+[root@master ~]# containerd config default >/etc/containerd/config.toml
+[root@master ~]# vim /etc/containerd/config.toml
+# 61: 配置容器镜像地址
+sandbox_image = "harbor:443/k8s/pause:3.9"
+# 125: 配置 cgroup 管理驱动，必须与 kubelet 一致
+SystemdCgroup = true
+# 154: 配置私有镜像仓库地址
+[plugins."io.containerd.grpc.v1.cri".registry.mirrors."docker.io"]
+endpoint = ["私有镜像仓库的地址"]
+[plugins."io.containerd.grpc.v1.cri".registry.mirrors."harbor:443"]
+endpoint = ["私有镜像仓库的地址"]
+[plugins."io.containerd.grpc.v1.cri".registry.configs."私有仓库地址".tls]
+insecure_skip_verify = true
+# 启动服务
+[root@master ~]# systemctl enable --now kubelet containerd
+```
+
+**配置内核参数**
+
+```bash
+[root@master ~]# vim /etc/modules-load.d/containerd.conf
+br_netfilter  # 网桥防火墙模块
+xt_conntrack  # 链接跟踪表模块
+[root@master ~]# systemctl start systemd-modules-load.service
+
+[root@master ~]# vim /etc/sysctl.d/99-kubernetes-cri.conf
+net.ipv4.ip_forward = 1            # 开启路由转发
+net.bridge.bridge-nf-call-iptables = 1  # 开启桥流量监控
+net.bridge.bridge-nf-call-ip6tables = 1  # 开启桥流量监控
+net.netfilter.nf_conntrack_max = 1000000  # 设置链接跟踪表大小
+[root@master ~]# sysctl -p /etc/sysctl.d/99-kubernetes-cri.conf
+```
+
+## 自动补全设置
+
+- kubectl、kubeadm 支持自动补全功能，可以节省大量输入
+- 自动补全脚本由 kubectl、kubeadm 产生，仅需要在您的 shell 配置文件中调用即可
+
+```bash
+[root@master ~]# source <(kubeadm completion bash|tee /etc/bash_completion.d/kubeadm)
+[root@master ~]# source <(kubectl completion bash|tee /etc/bash_completion.d/kubectl)
+```
+
+## **主控节点初始化**
+
+```bash
+[root@master ~]# vim /root/init/init.yaml
+13:  advertiseAddress: 192.168.88.50
+# 测试系统环境
+[root@master ~]# kubeadm init --config=init/init.yaml --dry-run 2>error.log
+[root@master ~]# cat error.log
+# 主控节点初始化
+[root@master ~]# rm -rf error.log /etc/kubernetes/tmp
+[root@master ~]# kubeadm init --config=init/init.yaml |tee init/init.log
+# 管理授权
+[root@master ~]# mkdir -p $HOME/.kube
+[root@master ~]# sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+[root@master ~]# sudo chown $(id -u):$(id -g) $HOME/.kube/config
+# 验证安装结果
+[root@master ~]# kubectl get nodes
+NAME     STATUS     ROLES           AGE   VERSION
+master   NotReady   control-plane   19s   v1.29.2
+```
+
+## 网络插件
+
+**calico **
+
+在虚拟化平台中，比如 OpenStack、Docker 等都需要实现 workloads 之间互连，但同时也需要对容器做隔离控制，设置访问策略，calico 就可以解决以上所有问题。calico 可以让不同节点上的容器，实现互联互通，同时也可以设置访问策略，它是一种容器之间网络互通的解决方案。
+
+**calico 优势**
+
+- 更节约资源：Calico 使用的三层路由方法，抑制二层广播，减少了资源开销，并且具有可扩展性。
+- 更容易管理：因为没有隧道，意味着 workloads 之间路径更短更简单，配置更少，更容易管理。
+- 更少的依赖：Calico 仅依赖三层路由可达。
+- 适配性广：较少的依赖性使它能适配所有 VM、Container、白盒或者混合环境场景。
+
+软件地址：https://github.com/projectcalico/calico
+
+##  安装计算节点
+
+node节点服务：**kubelet服务**：负责监视Pod，包括创建、修改、删除等；**Kube-proxy服务**：主要负责为Pod对象提供服务代理，实现service的通信与负载均衡；**Runtime**：容器管理
+
+### token管理
+
+node节点加入集群必须有master提供的token，token相当于证明文件
+
+**token管理命令**
+
+可选参数：`--print-join-command `直接打印安装命令，`--ttl`设置生命周期，0为无限
+
+```bash
+# 创建 token
+[root@master ~]# kubeadm token create --ttl=0 --print-join-command
+kubeadm join 192.168.88.50:6443 --token fhf6gk.bhhvsofvd672yd41 --discovery-token-ca-cert-hash sha256:ea07de5929da3d5793467......
+#查询、删除
+[root@master ~]# kubeadm token list
+[root@master ~]# kubeadm token delete abcdef.0123456789abcdef   #后面为list中查到的token
+```
+
+**获取token证书的hash**
+
+CA证书路径`/etc/kubernetes/pki/ca.crt`
+
+提供openssl指令获取
+
+```bash
+[root@master ~]# cd /etc/kubernetes/pki/
+[root@master pki]# openssl x509 -pubkey -in ca.crt | \
+                  openssl rsa -pubin -outform der | \
+                  openssl dgst -sha256 -hex
+writing RSA key
+(stdin)= f46dd7ee29faa3c096cad1899421d8a881f7623a543065fa6b0088c
+```
+
+
+
 # 集群管理
 
 kubectl用于控制Kubernetes集群的命令行工具

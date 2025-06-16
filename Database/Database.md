@@ -1051,3 +1051,26 @@ vim  /usr/local/mycat/conf/datasources/prototypeDs.data
 #
 ```
 
+
+
+
+
+
+
+
+
+# 数据库优化
+
+##  慢查询日志
+
+启用慢查询日志：（默认没有启用）slow-query-log 启用，long-query-time=num
+
+## 查询日志
+
+查询缓存(占用一部分内存)：query_cache_type=on，query_cache_size=num,
+
+## 创建索引
+
+创建合适的索引 `create index  indexname on tarena.user(name)`
+
+索引缓存
