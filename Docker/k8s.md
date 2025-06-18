@@ -1,3 +1,4 @@
+[toc]
 # Kubenetes概述
 
 ## k8s核心架构
@@ -660,7 +661,7 @@ spec:
 - 可选操作：添加事件处理函数：
   启动后回调（PostStart）、结束前回调（PreStop）
 
-![image-20250611113707081](C:\Users\zy\AppData\Roaming\Typora\typora-user-images\image-20250611113707081.png)
+![image-20250611113707081](./image-20250611113707081.png)
 
 ## Init容器
 
@@ -1040,3 +1041,722 @@ Kubernetes定义了一组标签，你可以设置这些标签来定义某个名�
 - enforce：策略违例会导致Pod被拒绝
 - audit：策略违例会触发审计日志，但是Pod仍可以被接受
 - warn：策略违例会触发用户可见的警告信息，但是Pod仍会被接受
+
+# 存储卷
+
+卷的概念：卷是一个抽象化的存储设备
+
+优点：1.卷可以解决容器崩溃或重启后历史数据丢失问题；2.解决容器或者Pod被删除后数据持久保存问题；3.解决多个容器共享数据的问题；4.Pod可以同时使用任意数目的卷
+
+## k8s 支持的卷类型
+
+- **持久卷**：持久卷是集群中的存储资源，就像他的名字一样，在里面存储的数据不会随着 Pod 的删除而丢失。
+- **临时卷**：有些应用程序需要额外的存储，但并不关心数据在重启后是否仍然可用。卷会遵从 Pod 的生命周期，与 Pod 一起创建和删除。
+- **投射卷**：它允许您将多个现有卷源映射到同一个目录。通过将这些不同类型的卷源组合成一个统一的卷，可以更方便地管理和使用这些资源
+
+**如何使用卷**
+
+在Pod.spec下添加volumes字段，配置外部存储卷，在Pod.spec.containers中添加volumeMounts字段，声明卷在容器中的挂载位置。
+
+<font style="color: rgb(255,0,0)">注意：卷不能挂载到其他卷上，也不能与其他卷有硬链接；Pod配置中的每个容器必须独立指定各个卷的挂载位置</font>
+
+### hostPath卷
+
+hostPath 是持久卷
+
+- hostPath 卷的本质是使用本地设备，例如磁盘、分区、目录、Socket、CharDevice 和 BlockDevice 等等。hostPath 卷的可用性取决于底层节点的可用性，如果节点变得不健康，那么 hostPath 卷也将不可被访问。
+- hostPath 卷里面的数据不会随着 Pod 的结束而消失。
+- 注意事项：配置相同的 Pod，可能在不同的节点上表现不同，因为不同节点上映射的文件内容不同
+
+```yaml
+spec:
+  volumes:
+    - name: logdata  # 卷的名称，供容器挂载时引用
+      hostPath:  # 使用节点本地文件系统作为存储
+        path: /var/weblog  # 节点上的实际路径
+        type: DirectoryOrCreate  # 如果目录不存在则自动创建
+  containers:
+    - name: nginx  # 容器名称
+      image: myos:nginx  # 使用的镜像
+      volumeMounts:  # 容器内的卷挂载配置
+        - name: logdata  # 引用上面定义的卷名称
+          mountPath: /usr/local/nginx/logs  # 容器内的挂载路径
+```
+
+| type 类型         | 说明                                       |
+| ----------------- | ------------------------------------------ |
+| DirectoryOrCreate | 卷映射对象是一个目录，如果不存在就创建它   |
+| Directory         | 卷映射对象是一个目录，且必须存在           |
+| FileOrCreate      | 卷映射对象是一个文件，如果不存在就创建它   |
+| File              | 卷映射对象是一个文件，且必须存在           |
+| Socket            | 卷映射对象是一个 Socket 套接字，且必须存在 |
+| CharDevice        | 卷映射对象是一个字符设备，且必须存在       |
+| BlockDevice       | 卷映射对象是一个块设备，且必须存在         |
+
+### NFS卷
+
+NFS 存储
+
+- k8s 中允许将 nfs 存储以卷的方式挂载到你的 Pod 中。
+- 在删除 Pod 时，nfs 存储卷会被卸载（umount），而不是被删除。nfs 卷可以在不同节点的 Pod 之间共享数据。
+
+NFS 卷的用途
+
+- NFS 最大的功能就是在不同节点的不同 Pod 中共享读写数据。本地 NFS 的客户端可以透明地读写位于远端 NFS 服务器上的文件，就像访问本地文件一样。
+
+注意：由于Pod的调度是随机的，为了保证每个节点都可以使用NFS服务，每个节点都应该安装NFS软件包工具
+
+```bash
+spec:
+  volumes:
+    - name: website  # 存储卷名称，用于后续容器挂载引用
+      nfs:  # 定义使用 NFS 类型的存储卷
+        server: 192.168.88.240  # NFS 服务器的 IP 地址
+        path: /var/webroot  # NFS 服务器上的共享目录路径
+  containers:
+    - name: nginx  # 容器名称
+      image: myos:nginx  # 使用的镜像
+      volumeMounts:  # 定义容器内的卷挂载点
+        - name: website  # 引用上面定义的存储卷名称
+          mountPath: /usr/local/nginx/html  # 挂载到容器内的路径
+```
+
+## PV/PVC管理
+
+如何使用 PV/PVC
+
+- PV 是资源的提供者，根据集群的基础设施变化而变化，由 K8s 集群管理员配置
+- PVC 是资源的使用者，根据业务服务的需求变化来配置，用户无需知道 PV 的技术细节，只需要声明你需求什么样的资源即可
+- PVC 会根据用户声明的需求，自动找到 PV 完成绑定
+
+PV资源文件
+
+```yaml
+---
+kind: PersistentVolume
+apiVersion: v1
+metadata:
+  name: pv-local
+spec:
+  volumeMode: Filesystem    # 提供资源的类型 [Filesystem, Block]
+  accessModes:              # 存储卷能提供的访问模式
+    - ReadWriteOnce         # 卷支持的模式，支持多种  RWO, ROX, RWX, RWOP
+  capacity:                 # 存储卷能提供的存储空间
+    storage: 10Gi           # 空间大小
+  persistentVolumeReclaimPolicy: Retain # 数据回收方式
+  hostPath:
+    path: /var/webroot  
+    type: DirectoryOrCreate
+    
+---
+kind: PersistentVolume
+apiVersion: v1
+metadata:                       
+  name: pv-nfs
+spec:
+  volumeMode: Filesystem
+  accessModes:
+  - ReadWriteOnce
+  - ReadOnlyMany
+  - ReadWriteMany
+  capacity:
+    storage: 5Gi
+  persistentVolumeReclaimPolicy: Retain
+  mountOptions:					#mount的参数
+  - nolock
+  nfs:
+    server: 192.168.88.240
+    path: /var/webroot
+```
+
+PVC资源文件
+
+```yaml
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: pvc1
+spec:
+  volumeMode: Filesystem
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 8Gi
+
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: pvc2
+spec:
+  volumeMode: Filesystem
+  accessModes:
+  - ReadWriteMany
+  resources:
+    requests:
+      storage: 3Gi
+```
+
+使用PVC用户无需关心后端存储设备，系统会自动查找分配
+
+**Pod调用PVC**
+
+```yaml
+spec:
+  volumes:                  # 定义存储卷
+    - name: logdata         # 存储卷名称
+      persistentVolumeClaim: # 定义资源对象
+        claimName: pvc1     # 资源对象PVC1
+    - name: website         # 存储卷名称
+      persistentVolumeClaim: # 定义资源对象
+        claimName: pvc2     # 资源对象PVC2
+  containers:
+  - name: nginx
+    image: myos:nginx
+    volumeMounts:
+    - name: logdata                  # PVC卷名称
+      mountPath: /usr/local/nginx/logs  # 挂载路径
+    - name: website                  # PVC卷名称
+      mountPath: /usr/local/nginx/html  # 挂载路径     
+```
+
+## 临时卷
+
+### configMap 卷
+configMap 是一种临时卷
+
+- configMap 卷提供了向 Pod 注入配置数据的方法，允许你将配置文件与镜像分离，使容器化的应用具有可移植性。
+- configMap 在使用之前需要先创建它，configMap 不是用来保存大量数据的，在其中保存的数据不可超过 1 MiB。
+
+configMap 的用途：
+
+- 配置环境变量
+- 修改配置文件的参数，数据库的地址等
+
+使用命令创建configMap
+
+```bash
+kubectl create configmap timezone --from-literal=TZ="Asia/Shanghai" --dry-run=client -o yaml
+kubectl create configmap nginx-php --from-file=nginx.conf 
+```
+
+使用资源清单文件创建ConfigMap
+
+```yaml
+---
+kind: ConfigMap
+apiVersion: v1
+metadata: 
+  name: timezone
+data:
+  TZ: Asia/shanghai
+```
+
+在Pod上调用
+
+```yaml
+---
+kind: Pod
+apiVersion: v1
+metadata:
+  name: web1
+spec:
+  ......
+  containers:
+    - name: nginx
+      image: myos:nginx
+      envFrom:          # 配置环境变量
+        - configMapRef: # 调用资源对象
+            name: timezone # configmap名称
+```
+
+
+### secret卷
+
+secret 是一种临时卷
+
+- Secret 类似于 ConfigMap 但专门用于保存机密数据
+- 在设置 Secret.data 字段时，所有键值都必须是经过 base64 编码的字符串
+
+secret 的用途：
+
+- 配置一些需要加密的环境变量或文件（例如：https 证书）
+- 访问需要认证登录的私有镜像仓库（例如：harbor 私有仓库）
+
+创建secret语法格式
+
+```bash
+kubectl create secret 子类型 名称 [选项/参数]
+#子类型
+#通用类型
+generic
+#用于认证登录私有仓库
+docker-registry
+#用于创建TLS证书的子类型
+tls
+#案例
+ kubectl create secret docker-registry harbor-auth \
+                         --docker-server=harbor:443 \
+                         --docker-username="用户名" \
+                         --docker-password="密码"
+#导出为yaml格式
+Kubectl get secrets harbor-auth -o yaml
+```
+
+### emptyDir卷
+
+emptyDir 临时卷
+
+- emptyDir 的本质是一个简单的空目录
+- emptyDir 可以提供临时空间，同一个 Pod 中容器也可以用来共享数据。案例：缓存服务器、数据统计分析、排序等。
+- emptyDir 随 Pod 创建而创建，Pod 在该节点上运行期间，一直存在。当 Pod 被从节点上删除时，临时卷中的数据也会被永久删除。
+- 重启 Pod 中的容器不会造成 emptyDir 数据的丢失。
+
+**配置缓存目录**
+
+```yaml
+spec:
+  imagePullSecrets:
+  - name: harbor-auth
+  volumes:                     # 定义卷
+  - name: cache                # 卷的名字，在容器内引用
+    emptyDir: {}               # 卷的类型
+  containers:
+  - name: apache
+    image: harbor:43/private/httpd:latest
+    volumeMounts:              # 在容器中挂载卷
+    - name: cache              # 卷的名字
+      mountPath: /var/cache    # 路径如果不存在，就创建出来
+                               # 路径如果存在，就覆盖
+```
+
+
+
+# 服务管理
+
+## Service
+
+**服务原理**
+
+**服务的自动感知**：服务会创建一个clusterIP这个地址对应资源地址，不管Pod如何变化，服务总能找到对应的Pod，且clusterIP保持不变
+
+**服务的负载均衡**：如果服务后端对应多个Pod，则会通过IPTables/LVS规则将访问的请求最终映射到Pod的容器内部，自动在多个容器之间实现负载均衡
+
+**服务的自动发现**：服务创建时会自动在内部DNS上注册域名，域名：<服务名称>.<名称空间>.svc.cluster.local
+
+```mermaid
+graph LR
+	F[user] --> A
+    A[Service ClusterIP] -.-> B[Node-0001]
+    A ---> C[Node-0002]
+    
+    subgraph Node-0001
+        B --> D[Pod]
+    end
+    
+    subgraph Node-0002
+        C --> E[Pod]
+    end
+```
+
+## ClusterIP服务
+
+默认的ServiceType，通过集群的内部IP暴露服务，选择该值时服务只能够在集群内部访问
+
+**服务的工作原理**：kube-proxy 是在所有节点上运行的代理。可以实现简单的数据转发，可以设
+置更新 IPTables/LVS 规则，在服务创建时，还提供服务地址 DNS 自动注册与服务发现功能
+
+![image-20250617113544807](./image-20250617113544807.png)
+
+```yaml
+---
+kind: Service        # 资源对象类型
+apiVersion: v1       # 版本
+metadata:            # 元数据
+  name: websvc       # 资源对象名称
+spec:                # 详细信息
+  type: ClusterIP    # 服务类型
+  clusterIP: 10.245.34.56  #固定IP
+  selector:          # 选择算符
+    app: web         # Pod 标签
+  ports:             # 端口
+  - protocol: TCP    # 协议
+    port: 80         # 服务的端口
+    targetPort: 80   # 后端 Pod 端口，可以使用端口别名
+```
+
+## 对外发布应用
+
+**发布服务**：ClusterIP 服务可以解决集群内应用互访的问题，但外部的应用无法访问集群内的资源，某些应用需要访问集群内的资源，我们就需要对外发布服务。
+
+**服务类型**：ClusterIP：默认类型，可以实现 Pod 的自动感知与负载均衡，是最核心的服务类型，但 ClusterIP 不能对外发布服务，如果想对外发布服务可以使用 NodePort 或 Ingress
+
+### NodePort服务
+
+使用基于端口映射（默认值：<font style="color: rgb(92, 217, 239)">30000-32767</font>）的方式对外发布服务，可以发布任意服务（四层），在<font style="color: rgb(170,85,0)">集群每个节点</font>的固定端口（默认 30000 - 32767 范围）暴露服务，外部可通过 `节点IP:节点端口` 访问。流量经节点端口转发到 Service，再到后端 Pod 。 
+
+服务资源文件
+
+```yaml
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: mysvc
+spec:
+  type: NodePort    # 指定服务类型
+  selector:
+    app: web
+  ports:
+  - protocol: TCP
+    port: 80
+    nodePort: 30080  # 可选配置，不指定使用随机端口
+    targetPort: 80
+```
+
+### Ingress
+
+使用Ingress控制器（一般有Nginx，HAProxy构成），用来发布http、https服务（七层）
+
+Ingress 公开从集群外部到集群内服务的 HTTP 和 HTTPS路由。流量路由由 Ingress 资源上定义的规则控制。Ingress 控制器通常由负载均衡器来实现（Nginx、HAProxy）
+
+```mermaid
+graph LR
+    A[Client] -->|HTTP/HTTPS 请求| B[Ingress-managed<br>Load Balancer]
+    B -->|路由流量| C[Ingress]
+    C -->|应用路由规则| D[Route Rules]
+    D -->|匹配路径/host| E[Service]
+    E -->|负载均衡| F[Pod]
+    E -->|负载均衡| G[Pod]
+    
+    classDef ingress fill:#FF9800,color:black,stroke:#F57C00;
+    classDef service fill:#4CAF50,color:white,stroke:#388E3C;
+    classDef pod fill:#2196F3,color:white,stroke:#0D47A1;
+    classDef client fill:#9C27B0,color:white;
+    
+    class B,C,D ingress;
+    class E service;
+    class F,G pod;
+    class A client;
+```
+
+ 
+
+# 认证与授权
+
+## ServiceAccount
+
+**用户认证**
+
+- 所有 Kubernetes 集群都有两类用户：由 Kubernetes 管理的服务账号和普通用户。
+- 普通用户是以证书或秘钥形式签发，主要用途是认证和鉴权，集群中并不包含用来代表普通用户账号的对象，普通用户的信息无法调用和查询。
+- 服务账号是 Kubernetes API 所管理的用户。它们被绑定到特定的名字空间，与一组 Secret 凭据相关联，供 Pod 调用以获得相应的授权。
+
+创建ServiceAccount
+
+```bash
+#资源清单文件
+apiVersion: v1 # 版本
+kind: ServiceAccount # 资源对象类型
+metadata: # 元数据
+name: kube-admin # ServiceAccount 名称
+namespace: kubernetes-dashboard # 名称空间
+
+#创建登录使用的token
+kubectl -n kubernetes-dashboard create token kube-admin
+```
+
+## 权限管理
+
+### 角色与授权
+
+如果想访问和管理 kubernetes 集群，就要对身份以及权限做验证，kubernetes 支持的鉴权模块有 Node、RBAC、ABAC、Webhook API
+
+- Node：一种特殊用途的鉴权模式，专门对 kubelet 发出的请求进行鉴权。
+- RBAC：是一种基于组织中用户的角色来控制资源使用的方法
+- ABAC：基于属性的访问控制，是一种通过将用户属性与权限组合在一起像用户授权的方法。
+- Webhook：是一个 HTTP 回调。
+
+### RBAC授权
+
+RBAC 声明了四种 Kubernetes 对象：
+
+- **Role**：用来在某一个名称空间内创建授权角色，创建 Role 时，必须指定所属的名字空间的名字。
+- **ClusterRole**：可以和 Role 相同完成授权。但属于集群范围，对所有名称空间有效。
+- **RoleBinding**：是将角色中定义的权限赋予一个或者一组用户，可以使用 Role 或 ClusterRole 完成授权。
+- **ClusterRoleBinding**：在集群范围执行授权，对所有名称空间有效，只能使用 ClusterRole 完成授权。
+
+| 资源对象               | 描述                                        | 作用域       |
+| ---------------------- | ------------------------------------------- | ------------ |
+| **ServiceAccount**     | 服务账号，为 Pod 中运行的进程提供了一个身份 | 单一名称空间 |
+| **Role**               | 角色，包含一组代表相关权限的规则            | 单一名称空间 |
+| **ClusterRole**        | 角色，包含一组代表相关权限的规则            | 全集群       |
+| **RoleBinding**        | 将权限赋予用户，Role、ClusterRole 均可使用  | 单一名称空间 |
+| **ClusterRoleBinding** | 将权限赋予用户，只可以使用 ClusterRole      | 全集群       |
+
+**资源对象权限**
+
+|  create  |  delete  | deletecollection |     get      |     list     |  patch   |  update  |  watch   |
+| :------: | :------: | :--------------: | :----------: | :----------: | :------: | :------: | :------: |
+| **创建** | **删除** |   **删除集合**   | **获取属性** | **获取列表** | **补丁** | **更新** | **监控** |
+
+**自定义角色**
+
+```yaml
+---
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  namespace: default
+  name: myrole       # 角色名称
+rules:               # 规则
+- apiGroups:         # 资源对象所属组信息
+  - ""               # 分组信息
+  resources:         # 要设置权限的资源对象
+  - pods             # 授权资源对象名称
+  verbs:             # 权限设置
+  - get              # 权限
+  - list             # 权限
+```
+
+**给kube-admin授普通用户权限**
+
+```yaml
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  namespace: default
+  name: kube-admin-role       # 授权策略名称
+roleRef:                      # 关联权限
+  apiGroup: rbac.authorization.k8s.io  # 角色对象组
+  kind: Role                  # 角色对象
+  name: myrole                # 角色名称
+subjects:                     # 授权信息
+- kind: ServiceAccount        # 账号资源对象
+  name: kube-admin            # 账号名称
+  namespace: kubernetes-dashboard  # 账号所在的名称空间
+```
+
+**给 kube-admin 授管理员权限**
+
+```yaml
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:                      # 元数据
+  name: kube-admin-role        # 授权策略名称
+roleRef:                       # 关联权限
+  apiGroup: rbac.authorization.k8s.io  # 角色对象组
+  kind: ClusterRole            # 角色对象
+  name: cluster-admin          # 角色名称
+subjects:                      # 授权信息
+- kind: ServiceAccount         # 账号资源对象
+  name: kube-admin             # 账号名称
+  namespace: kubernetes-dashboard  # 账号所在的名称空间
+```
+
+# 控制器
+
+控制器是k8s内置的管理工具，可以帮助用户实现Pod的自动部署、自动维护、扩容、滚动更新等功能的自动化程序。
+
+## Deployment控制器
+
+```mermaid
+graph LR
+  A[Deployment]-->B([ReplicaSet])
+  B-->C[(Pod)]
+  B-->D[(Pod)]
+  B-->E[(Pod)]
+```
+
+最常用的无状态服务控制器，由 Deployment、ReplicaSet、Pod 组成、支持集群扩容缩容、滚动、更新、自动维护 Pod 可用性及副本数量等功能，ReplicaSet 和 Pod 由 Deployment 自动管理，用户无需干预
+
+资源文件
+
+```yaml
+---
+kind: Deployment        # 资源对象类型
+apiVersion: apps/v1     # 版本
+metadata:               # 元数据
+  name: mydeploy        # 名称
+spec:                   # 详细定义
+  replicas: 3           # 副本数量
+  selector:             # 定义标签选择器
+    matchLabels:        # 支持 matchExpressions 表达式语法
+      app: deploy-httpd # 通过标签来确定哪个 Pod 由它来管理
+  template:             # 定义用来创建 Pod 的模板
+    metadata:                          # Pod 元数据
+      labels:                          # 名称由控制器生成
+        app: deploy-httpd              # 这里只能定义标签
+    spec:                              # Pod 的详细定义
+      containers:                      # 容器定义
+      - name: web                      # 容器名称
+        image: myos:httpd              # 创建容器使用的镜像  
+```
+
+集群扩容
+
+```bash
+ kubectl scale deployment mydeploy --replicas 10
+```
+
+历史版本信息
+
+```bash
+kubectl rollout history deployment mydeploy
+# 添加注释信息
+kubectl annotate deployments mydeploy kubernetes.io/change-cause="httpd.v1"
+#滚动更新
+kubectl set image deployment mydeploy web=myos:nginx
+# 给新版本添加注释信息
+kubectl annotate deployments mydeploy kubernetes.io/change-cause="update nginx.v1"
+#历史版本回滚
+kubectl rollout undo deployment mydeploy --to-revision 1
+```
+
+## DaemonSet控制器
+
+```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '14px'}, 'flowchart':{'scale': 0.05},'flowchart':{'nodeSpacing': 20} }}%%
+graph LR
+  A(((DaemonSet)))--->B{node1}:::ndoe & C{node2}:::ndoe & D{node3}:::ndoe
+  B o--o E[(Pod)]:::Pod
+  C o--o F[(Pod)]:::Pod
+  D o--o G[(Pod)]:::Pod
+  style A fill:#4af,stroke-width:2px
+  classDef ndoe fill:#cfb,stroke-width:2px
+  classDef Pod fill:#cfb,stroke-width:2px
+```
+
+DaemonSet控制器：无法自定义副本数量；所创建的Pod与node节点绑定；每个node上都会运行一个Pod；当有新的Node加入集群时，会为其新增Pod副本，当Node从集群中除时，这些Pod也会被回收。典型应用：kube-proxy
+
+**资源清单文件**
+
+```yaml
+---
+kind: DaemonSet
+apiVersion: apps/v1
+metadata:
+  name: myds
+spec:
+  selectors:
+    matchLabels:
+      app: ds-httpd
+  template:
+    metadata: 
+      labels:
+        app: ds-httpd
+    spec:
+      containers:
+      - name: web
+        image: myos:httpd
+        imagePullPolicy: Always
+```
+
+## Job/CronJob控制器
+
+```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '14px'}, 'flowchart':{'scale': 0.05},'flowchart':{'nodeSpacing': 20} }}%%
+graph LR
+ A{{Job}}:::Job --> B[(Pod)]:::Pod
+
+ C((CronJob)):::Job --- D{{Job}}:::Pod & E{{Job}}:::Pod & F{{Job}}:::Pod
+ D -->J[(Pod)]:::Pod
+ E -->K[(Pod)]:::Pod
+ F -->L[(Pod)]:::Pod
+
+ classDef Pod fill:#cfb,stroke-width:2px
+ classDef Job fill:#4af,stroke:#f15
+```
+
+**Job**是一个单任务控制器，负责执行一次任务，保证任务在一个或者多个Pod上执行成功
+
+**CronJob**像是Job的升级版，基于时间管理的Job控制器
+
+**定义Job资源对象**
+
+```yaml
+---
+kind: Job
+apiVersion: batch/v1
+metadata:
+  name: myjob                        # 资源对象名称
+spec:                                # Job 的详细定义
+  template:                          # 创建 Pod 的模板
+    metadata: {}
+    spec:
+      restartPolicy: OnFailure       # 只支持[OnFailure,Never]
+      containers:
+      - name: myjob
+        image: myos:8.5
+        command: [sh]
+        args:
+        - -c
+        - |
+          sleep 3
+          exit $((RANDOM%2))
+```
+
+**定义CronJob资源对象**
+
+```bash
+---
+kind: CronJob
+apiVersion: batch/v1
+metadata: 
+  name: mycj
+spec:
+  schedule: "* * * * *"			#时间周期：[分、时、日、月、周]
+  jobTemplate:					#定义Job模板
+    spec:
+      template:						#创建Pod的模板
+        spec:						#Pod的详细定义
+          restartPolicy: OnFailure	
+          containers:
+          - name: myjob
+            image: myos:8.5
+            command: ["/bin/sh"]
+            args:
+            - -c
+            - |
+              sleep 3
+              exit $((RANDOM%2))
+```
+
+## StatefulSet控制器
+
+```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '14px'}, 'flowchart':{'scale': 0.05},'flowchart':{'nodeSpacing': 20} }}%%
+graph LR
+  A((StatefulSet)):::first --- B[(Pod)]:::Pod & C[(Pod)]:::Pod & D[(Pod)]:::Pod
+  B & C & D o--o E([Headless
+  Services]):::first
+   E -.- F((Client/User))
+   
+  classDef first fill:#4af,stroke-width: 4px
+  classDef Pod fill:#cfb,stroke-width:2px
+  style F fill:#f9f,stroke-width:2px
+```
+
+StatefulSet旨在与有状态的应用及分布式系统一起使用，涉及了Headless服务、存储卷、DNS等相关知识点。
+
+## HPA控制器
+
+```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '14px'}, 'flowchart':{'scale': 0.05},'flowchart':{'nodeSpacing': 20} }}%%
+graph LR
+  A([HorizonPodAutoscaler]):::fi --> B((Deployment)):::fi
+  B --> E
+  A --> ID1
+  subgraph ID1 [Pod cluster]
+  direction LR
+  E([ReplicaSet]) --> F[(Pod)]  
+  E -.-> G[(Pod)]
+  E -.-> H[(Pod)]
+  end
+  classDef fi fill:#4af,stroke-wi
+```
+
