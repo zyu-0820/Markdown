@@ -1757,6 +1757,6 @@ graph LR
   E -.-> G[(Pod)]
   E -.-> H[(Pod)]
   end
-  classDef fi fill:#4af,stroke-wi
+  classDef fi fill:#4af,stroke-width:3px
 ```
 
